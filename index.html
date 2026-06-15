@@ -1,131 +1,1069 @@
 <!DOCTYPE html>
-<html lang="en-us">
-
+<html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Dashmetry - Student Portal</title>
-    <meta name="description" content="Dashmetry allows you to go on epic adventures in the world of geometry completely free of charge. Challenging maps are waiting for you to conquer!" />
-
-    <!-- Styles -->
-    <link rel="stylesheet" href="25081902/theme/game.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Heron Dash - VRMS</title>
     <style>
-        .jss1:before {
-            content: "";
-            position: absolute;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            opacity: 0.5;
-            filter: blur(16px);
-            background-size: cover;
-            background-image: url("25081902/loading.png");
+        /* CSS is kept in the single file and uses a dark, neon-themed aesthetic */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@700;900&display=swap');
+
+        :root {
+            --primary: #00ffea;
+            --secondary: #bd00ff;
+            --panel: rgba(0, 0, 0, 0.95);
+            --color-ship: #ff9900;
+            --color-cube: #00ff00;
+            --color-grav-up: yellow;
+            --color-grav-down: #00ffff;
         }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: #050505;
+            overflow: hidden;
+            font-family: 'Roboto', sans-serif;
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw; height: 100vh;
+            display: flex;
+            justify-content: center; align-items: center;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%; height: 100%;
+            /* Gradient background for the level */
+            background: linear-gradient(180deg, #1a1a2e 0%, #000 100%);
+        }
+
+        /* UI Styling */
+        #ui-layer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 10;
+        }
+
+        .menu-screen {
+            pointer-events: auto;
+            background: var(--panel);
+            padding: 20px;
+            border-radius: 12px;
+            border: 3px solid var(--primary);
+            text-align: center;
+            display: none;
+            width: 90%; max-width: 400px;
+            box-shadow: 0 0 50px rgba(0, 255, 234, 0.2);
+            animation: pop 0.2s ease-out;
+        }
+
+        .menu-screen.active { display: flex; flex-direction: column; gap: 10px; }
+
+        h1 {
+            font-size: 2rem; margin: 0 0 10px 0;
+            background: linear-gradient(to right, var(--primary), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase; font-style: italic;
+        }
+
+        button {
+            background: linear-gradient(45deg, var(--primary), #00a8cc);
+            border: none; padding: 12px;
+            border-radius: 6px;
+            color: #000; font-weight: 900; font-size: 1.1rem;
+            text-transform: uppercase; cursor: pointer;
+            width: 100%;
+            transition: all 0.1s;
+        }
+        button:hover { filter: brightness(1.1); }
+        button:active { transform: scale(0.98); }
+        button.secondary { background: #444; color: white; }
+
+        .level-scroll {
+            max-height: 300px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 5px; width: 100%;
+        }
+        .level-btn {
+            background: #222; color: white; padding: 15px;
+            border: 1px solid #444; text-align: left;
+            cursor: pointer; display: flex; justify-content: space-between;
+            border-radius: 4px;
+        }
+
+        /* Editor Toolbar */
+        #editor-ui {
+            position: absolute; bottom: 10px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 10px; border-radius: 10px;
+            display: none; pointer-events: auto;
+            border: 1px solid #555;
+            z-index: 20;
+            width: 95%; max-width: 650px;
+            display: flex;
+            flex-wrap: wrap; justify-content: center; gap: 5px;
+        }
+        
+        /* Ensure editor UI is hidden by default and only shown by JS */
+        #editor-ui:not(.active) { display: none; }
+
+        .tool-group {
+            display: flex; gap: 5px; padding: 0 5px;
+            border-right: 1px solid #444;
+        }
+        .tool-group:last-child { border: none; }
+
+        .tool {
+            width: 40px; height: 40px;
+            border: 2px solid #333; border-radius: 4px;
+            background: #111; color: white;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 12px; cursor: pointer;
+            position: relative;
+        }
+        .tool.selected { 
+            border-color: var(--primary); 
+            background: #222; 
+            box-shadow: 0 0 5px var(--primary);
+        }
+        
+        /* Simple CSS Icons */
+        .icon-spike { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 16px solid white; }
+        .icon-block { width: 16px; height: 16px; border: 2px solid white; }
+        .icon-orb { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
+        
+        /* Portal Icons */
+        .icon-portal { width: 12px; height: 20px; border: 2px solid; border-radius: 4px; position: relative; font-weight: bold; }
+        .icon-portal.grav-up::before { content: '▲'; position: absolute; top: 1px; left: 1px; font-size: 10px; line-height: 10px; color: var(--color-grav-up); }
+        .icon-portal.grav-down::before { content: '▼'; position: absolute; bottom: 1px; left: 1px; font-size: 10px; line-height: 10px; color: var(--color-grav-down); }
+
+
+        /* Color utility classes for editor icons */
+        .c-yel { border-color: var(--color-grav-up) !important; color: var(--color-grav-up); }
+        .c-pink { border-color: #ff00ff !important; color: #ff00ff; }
+        .c-blue { border-color: var(--color-grav-down) !important; color: var(--color-grav-down); }
+        .c-green { border-color: var(--color-cube) !important; color: var(--color-cube); }
+        .c-org { border-color: var(--color-ship) !important; color: var(--color-ship); }
+
+        #hud {
+            position: absolute; top: 10px; left: 10px;
+            color: white; font-weight: bold; font-size: 1.2rem;
+            z-index: 5; text-shadow: 2px 2px 0 #000; display: none;
+        }
+        /* Mobile controls overlay to capture all touch input */
+        #mobile-controls { 
+            position: absolute; inset: 0; z-index: 1; 
+            display: none; 
+            touch-action: manipulation;
+        }
+
+        @keyframes pop { from{transform:scale(0.8);opacity:0;} to{transform:scale(1);opacity:1;} }
     </style>
-
-    <!-- Game Config -->
-    <script>
-        const versionFolder = "25081902/";
-        // CHANGED: Removed the external URL so it loads your local files
-        const basePath = versionFolder + "Build";
-        const loaderUrl = basePath + "/geometry-lite-v25081902.loader.js";
-
-        const config = {
-            dataUrl: basePath + "/geometry-lite-v25081902.data.unityweb",
-            frameworkUrl: basePath + "/geometry-lite-v25081902.framework.js.unityweb",
-            codeUrl: basePath + "/geometry-lite-v25081902.wasm.unityweb",
-            streamingAssetsUrl: versionFolder + "StreamingAssets",
-            companyName: "1games.io",
-            productName: "Dashmetry",
-            productVersion: "25081902",
-            pubId: "",
-            hostindex: 2,
-            gameId: "geometry-lite",
-            eventLog: true,
-            buildAPI: "https://event.azgame.io/apiaz/event",
-            enableMoreGame: "yes",
-            enablePromotion: false,
-            gdHost: false
-        };
-
-        const endLogDate = new Date("2025-07-23T02:18:03.775Z");
-        if (new Date() > endLogDate) config.eventLog = false;
-    </script>
 </head>
-
 <body>
-    <!-- Unity Canvas -->
-    <div id="unity-container" style="display: none;">
-        <canvas id="unity-canvas"></canvas>
-    </div>
 
-    <!-- Loading Screen -->
-    <div id="loadingBlock">
-        <div class="jss31 jss34 jss1">
-            <div style="position: absolute; bottom: 10px; right: 10px; font-family: Arial, sans-serif; font-size: 18px; color: #fff; opacity: 0.5;">
-                v25081902
-            </div>
-            <div class="spinner"></div>
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <!-- Full-screen, transparent layer for mobile touch input -->
+    <div id="mobile-controls"></div>
+    <div id="hud">Attempt <span id="att">1</span></div>
 
-            <div class="jss31 jss34 jss48" style="flex: 1 1 0%;">
-                <div class="jss32">
-                    <div class="jss7 jss9 jss20 jss3">
-                        <div class="jss125">
-                            <div class="jss123"></div>
-                            <img id="game-logo" src="25081902/logo.png" />
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div id="ui-layer">
+        <!-- Main Menu -->
+        <div id="m-main" class="menu-screen active">
+            <h1>HERON DASH</h1>
+            <p style="color:#F76B1C;margin-top:-6px;letter-spacing:1px;font-size:14px;">Fly Herons, Fly &middot; VRMS</p>
+            <button onclick="window.Game.menu('levels')">Play Levels</button>
+            <button onclick="window.Game.editor()">Level Editor</button>
+            <button class="secondary" onclick="window.Game.menu('cust')">Icon Kit</button>
+        </div>
 
-            <div class="jss31 jss34" style="flex: 3 1 0%;">
-                <div class="jss32">
-                    <div class="jss31 jss34 jss39 jss50 gameloader">
-                        <div class="jss32">
-                            <div class="gameloader-game-name">Dashmetry</div>
-                        </div>
-                        <div class="jss32 gameloader-logo">
-                            <img src="25081902/loading.png" />
-                        </div>
-                        <div class="jss32">
-                            <div class="gameloader-progressbar">
-                                <div class="gameloader-progressbar-progress" id="progress_fill" style="width: 0%;"></div>
-                            </div>
-                            <div class="gameloader-progress-info">Loading Game...</div>
-                        </div>
-                    </div>
-                </div>
+        <!-- Level Selection Menu -->
+        <div id="m-levels" class="menu-screen">
+            <h2>Select Level</h2>
+            <div class="level-scroll" id="level-list"></div>
+            <button class="secondary" onclick="window.Game.menu('main')">Back</button>
+        </div>
+
+        <!-- Customization Menu -->
+        <div id="m-cust" class="menu-screen">
+            <h2>Icon Kit</h2>
+            <canvas id="prevC" width="80" height="80" style="background:#000; border-radius:8px; border:1px solid #555; align-self:center;"></canvas>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <input type="color" id="c1" value="#00ffea" onchange="window.Game.updIcon()">
+                <input type="color" id="c2" value="#bd00ff" onchange="window.Game.updIcon()">
             </div>
+            <button onclick="window.Game.menu('main')">Back</button>
+        </div>
+
+        <!-- Pause/Death Menu -->
+        <div id="m-pause" class="menu-screen">
+            <h2 id="p-title">Paused</h2>
+            <button onclick="window.Game.restart()">Restart</button>
+            <button id="btn-resume" onclick="window.Game.resume()">Resume</button>
+            <button class="secondary" onclick="window.Game.menu('main')">Exit</button>
         </div>
     </div>
 
-    <!-- Unity Loader -->
-    <script>
-        const progressElement = document.getElementById('progress_fill');
-        const container = document.getElementById("unity-container");
-        const canvas = document.getElementById("unity-canvas");
-        const loadingBar = document.querySelector("#loadingBlock");
-        const progressText = document.querySelector(".gameloader-progress-info");
+    <!-- Editor Toolbar -->
+    <div id="editor-ui">
+        <div class="tool-group">
+            <div class="tool selected" onclick="window.Editor.tool(1)" title="Block"><div class="icon-block"></div></div>
+            <div class="tool" onclick="window.Editor.tool(2)" title="Spike"><div class="icon-spike"></div></div>
+        </div>
+        <div class="tool-group">
+            <div class="tool" onclick="window.Editor.tool(3)" title="Yellow Pad"><div class="icon-block c-yel" style="height:4px; margin-top:10px;"></div></div>
+            <div class="tool" onclick="window.Editor.tool(4)" title="Pink Pad"><div class="icon-block c-pink" style="height:4px; margin-top:10px;"></div></div>
+        </div>
+        <div class="tool-group">
+            <div class="tool" onclick="window.Editor.tool(5)" title="Yellow Orb"><div class="icon-orb c-yel"></div></div>
+            <div class="tool" onclick="window.Editor.tool(6)" title="Pink Orb"><div class="icon-orb c-pink"></div></div>
+        </div>
+        <div class="tool-group">
+            <div class="tool" onclick="window.Editor.tool(7)" title="Ship Portal"><div class="icon-portal c-org">S</div></div>
+            <div class="tool" onclick="window.Editor.tool(8)" title="Cube Portal"><div class="icon-portal c-green">C</div></div>
+        </div>
+        <div class="tool-group">
+            <div class="tool" onclick="window.Editor.tool(9)" title="Gravity Up"><div class="icon-portal c-yel grav-up"></div></div>
+            <div class="tool" onclick="window.Editor.tool(10)" title="Gravity Down"><div class="icon-portal c-blue grav-down"></div></div>
+        </div>
+        <div class="tool-group">
+            <button style="width:auto; font-size:0.8rem; padding:5px 10px;" onclick="window.Editor.test()">TEST</button>
+            <button style="width:auto; font-size:0.8rem; padding:5px 10px; background:#444;" onclick="window.Game.menu('main')">X</button>
+        </div>
+    </div>
+</div>
 
-        const script = document.createElement("script");
-        script.src = loaderUrl;
-        script.onload = () => {
-            createUnityInstance(canvas, config, (progress) => {
-                const percent = Math.round(progress * 100);
-                progressElement.style.width = percent + "%";
-                progressText.innerText = percent >= 99 ? "Loading Game ..." : `Downloading file: ${percent}%`;
-            }).then((unityInstance) => {
-                window.unityInstance = unityInstance;
-                setTimeout(() => {
-                    loadingBar.style.display = "none";
-                    container.style.display = "block";
-                    window.focus();
-                }, 2000);
-            }).catch(alert);
-        };
-        document.body.appendChild(script);
-    </script>
+<script>
+/** GEODASH LITE - Fixed Scope Version (2.3 Physics) */
+
+(function() {
+    // --- CONSTANTS (C, formerly K, is now scoped correctly) ---
+    const C = {
+        G: 0.85,           // Cube Gravity
+        G_SHIP: 0.35,      // Ship Gravity (Lighter)
+        SHIP_THRUST: -0.6, // Ship Lift Force
+        JUMP: -14.5,       // Cube Jump
+
+        // Interactables Forces
+        PAD_Y: -18,        // Yellow Pad Force
+        PAD_P: -12,        // Pink Pad Force
+        ORB_Y: -14,        // Yellow Orb Force (Jump)
+        ORB_P: -9,         // Pink Orb Force (Hop)
+
+        SPD: 7.2,          // Horizontal Speed
+        BLK: 60,           // Grid Size (60x60 pixels)
+        TERM: 20           // Max fall speed (Terminal Velocity)
+    };
+
+    // --- OBJECT TYPES ---
+    const T = {
+        EMPTY: 0, BLOCK: 1, SPIKE: 2,
+        PAD_Y: 3, PAD_P: 4,
+        ORB_Y: 5, ORB_P: 6,
+        PORT_SHIP: 7, PORT_CUBE: 8,
+        PORT_GRAV_N: 9, // Normal (Down) Gravity
+        PORT_GRAV_I: 10 // Inverted (Up) Gravity
+    };
+
+    // --- AUDIO (Sfx: Simple Tone.js-like functionality using Web Audio API) ---
+    const Sfx = {
+        ctx: null,
+        isInitialized: false,
+        init() {
+            if(this.isInitialized) return;
+            try {
+                this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                this.isInitialized = true;
+            } catch (e) {
+                console.error("Audio Context failed to initialize:", e);
+            }
+        },
+        play(type) {
+            if(!this.isInitialized) return;
+
+            try {
+                const osc = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                osc.connect(g); g.connect(this.ctx.destination);
+
+                const now = this.ctx.currentTime;
+                let gain = 0.1;
+
+                if(type==='jump') { osc.type='square'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(300, now+0.1); }
+                else if(type==='die') { osc.type='sawtooth'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now+0.4); gain = 0.2; }
+                else if(type==='orb') { osc.type='sine'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(600, now+0.1); }
+                else if(type==='portal') { osc.type='triangle'; osc.frequency.setValueAtTime(200, now); osc.frequency.linearRampToValueAtTime(800, now+0.3); gain = 0.05; }
+
+                g.gain.value=gain; osc.start(); osc.stop(now+(type==='die'?0.4:0.1));
+            } catch(e) {
+                console.warn("Sound failed to play:", type);
+            }
+        }
+    };
+
+    // --- LEVEL GENERATION (Procedural) ---
+    const LEVELS = [
+        {n: "Stereo Madness", d:"Easy", minLen: 150},
+        {n: "Back on Track", d:"Normal", minLen: 200},
+        {n: "Polargeist", d:"Normal", minLen: 250},
+        {n: "Dry Out", d:"Hard", minLen: 300},
+    ];
+
+    function genLevel(idx) {
+        const len = LEVELS[idx].minLen + (idx * 50);
+        // 12 rows (0-11), map[11] is off-screen, map[10] is ground
+        let map = Array(12).fill(0).map(()=>Array(len).fill(0));
+
+        // Always place a solid ground block at row 10
+        for (let c = 0; c < len; c++) {
+            map[10][c] = T.BLOCK;
+        }
+
+        for(let x=20; x<len-20; x++) {
+            const r = Math.random();
+
+            // 1. Floor Spikes (Row 9)
+            if(r < 0.05) {
+                map[9][x] = T.SPIKE;
+            }
+
+            // 2. Basic Blocks (Row 9/8)
+            else if(r < 0.15) {
+                map[9][x] = T.BLOCK;
+                if(Math.random()>0.5) map[8][x] = T.BLOCK;
+            }
+
+            // 3. Pads/Orbs (Row 9 or 8)
+            else if(r < 0.18) {
+                 map[9][x] = T.PAD_Y;
+            }
+            else if(r < 0.21) {
+                 map[8][x] = T.ORB_Y;
+            }
+
+            // 4. Advanced Features (Index dependent)
+            if(idx >= 1 && x % 40 === 0 && x > 40) {
+                // Ship Section
+                map[8][x] = T.PORT_SHIP; // Cube -> Ship
+                map[8][x+30] = T.PORT_CUBE; // Ship -> Cube
+            }
+
+            if(idx >= 2 && x % 50 === 25) {
+                // Gravity Portal section (middle of map for visual effect)
+                map[5][x] = T.PORT_GRAV_I; // Normal -> Inverted (Up)
+                map[5][x+20] = T.PORT_GRAV_N; // Inverted -> Normal (Down)
+                // Ceiling spikes for the inverted section
+                map[1][x+10] = T.SPIKE;
+            }
+        }
+
+        // Goal at the end
+        for(let r=0; r<11; r++) map[r][len-5] = T.BLOCK;
+
+        return map;
+    }
+
+    // --- PHYSICS ENTITIES ---
+    class Player {
+        constructor() {
+            this.w = 40; this.h = 40;
+            // Default colors (used in customizer)
+            this.c1 = '#00ffea'; this.c2 = '#bd00ff';
+            this.reset();
+        }
+
+        reset() {
+            this.x = 200; this.y = 10 * C.BLK - this.h; // Start on the ground (row 10)
+            this.vx = C.SPD; this.vy = 0;
+            this.mode = 'cube'; // 'cube' or 'ship'
+            this.gravDir = 1;   // 1 (down) or -1 (up)
+            this.rot = 0;
+            this.ground = false;
+            this.dead = false;
+            this.win = false;
+            this.holding = false;
+        }
+
+        update(objs, input) {
+            if(this.dead || this.win) return;
+
+            // Store previous position for collision check
+            this.px = this.x;
+            this.py = this.y;
+
+            // --- Apply Gravity / Thrust ---
+            let gravity = (this.mode === 'cube') ? C.G : C.G_SHIP;
+
+            if(this.mode === 'ship') {
+                if(this.holding) {
+                    this.vy += C.SHIP_THRUST * this.gravDir;
+                } else {
+                    this.vy += gravity * this.gravDir;
+                }
+            } else {
+                this.vy += gravity * this.gravDir;
+            }
+
+            // Terminal Velocity Check
+            if(Math.abs(this.vy) > C.TERM) this.vy = Math.sign(this.vy) * C.TERM;
+
+            // --- Move ---
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // --- Rotation ---
+            if(this.mode === 'cube') {
+                if(this.ground) {
+                    // Snap rotation to nearest 90 degrees when on ground
+                    let targetRot = Math.round(this.rot / (Math.PI/2)) * (Math.PI/2);
+                    this.rot += (targetRot - this.rot) * 0.25;
+                } else {
+                    this.rot += 0.15 * this.gravDir;
+                }
+            } else {
+                // Ship Rotation
+                let targetRot = (this.vy * 0.1);
+                this.rot += (targetRot - this.rot) * 0.1;
+            }
+
+            this.ground = false;
+            this.checkCol(objs, input);
+        }
+
+        checkCol(objs, input) {
+            if(this.dead || this.win) return;
+
+            // Player Hitboxes
+            const pR = {l:this.x, r:this.x+this.w, t:this.y, b:this.y+this.h};
+            // Reduced hitbox for hazards (spikes) to make gameplay a bit fairer
+            const pR_Spike = {l:this.x+8, r:this.x+this.w-8, t:this.y+8, b:this.y+this.h-8};
+            // Previous position hitbox
+            const ppR = {l:this.px, r:this.px+this.w, t:this.py, b:this.py+this.h};
+
+            // World Bounds Collision (Floor/Ceiling)
+            const floorY = 11 * C.BLK; // Bottom edge of row 11 (off-screen)
+            const ceilY = 0;
+
+            if(this.gravDir === 1) { // Normal Gravity (Down)
+                if(pR.b > floorY) { this.y = floorY - this.h; this.vy = 0; this.ground = true; }
+                if(pR.t < ceilY) { this.y = ceilY; this.vy = 0; if(this.mode === 'ship') this.die(); }
+            } else { // Inverted Gravity (Up)
+                if(pR.t < ceilY) { this.y = ceilY; this.vy = 0; this.ground = true; }
+                if(pR.b > floorY) { this.y = floorY - this.h; this.vy = 0; if(this.mode === 'ship') this.die(); }
+            }
+
+            // Object Collision
+            for(let o of objs) {
+                // Optimization: Skip objects far away
+                if(o.x < this.x - C.BLK || o.x > this.x + C.BLK * 2) continue;
+
+                const oR = {l:o.x, r:o.x+C.BLK, t:o.y, b:o.y+C.BLK};
+                let currentPR = (o.t === T.SPIKE) ? pR_Spike : pR;
+
+                // AABB Collision Check
+                if(currentPR.r>oR.l && currentPR.l<oR.r && currentPR.b>oR.t && currentPR.t<oR.b) {
+
+                    // --- SOLIDS (BLOCKS) ---
+                    if(o.t === T.BLOCK) {
+                        let yResolution = false;
+                        const EPS = 2; // small tolerance to avoid float/rounding problems
+
+                        // 1. Resolve Vertical Movement (with small tolerance so standing still counts as landed)
+                        if(this.gravDir === 1) { // Normal Gravity
+                            // Landing on top (player was above or just touching)
+                            if((this.vy > 0 && ppR.b <= oR.t + EPS) || (this.vy === 0 && ppR.b <= oR.t + EPS && pR.b <= oR.t + EPS)) {
+                                this.y = oR.t - this.h; this.vy = 0; this.ground = true; yResolution = true;
+                            }
+                            // Hitting head on bottom
+                            else if((this.vy < 0 && ppR.t >= oR.b - EPS) || (this.vy === 0 && ppR.t >= oR.b - EPS && pR.t >= oR.b - EPS)) {
+                                this.y = oR.b; this.vy = 0; yResolution = true;
+                            }
+                        } else { // Inverted Gravity
+                            // Landing on bottom (inverted)
+                            if((this.vy < 0 && ppR.t >= oR.b - EPS) || (this.vy === 0 && ppR.t >= oR.b - EPS && pR.t >= oR.b - EPS)) {
+                                this.y = oR.b; this.vy = 0; this.ground = true; yResolution = true;
+                            }
+                            // Hitting head on top (inverted)
+                            else if((this.vy > 0 && ppR.b <= oR.t + EPS) || (this.vy === 0 && ppR.b <= oR.t + EPS && pR.b <= oR.t + EPS)) {
+                                this.y = oR.t - this.h; this.vy = 0; yResolution = true;
+                            }
+                        }
+
+                        // 2. Side Collision Fix — only kill if approach is clearly horizontal
+                        if (!yResolution) {
+                            // Approach detection using previous position with small epsilon to avoid counting exact-touch as side
+                            const fromLeft = (this.px + this.w) <= oR.l - 1;  // previously fully left of object
+                            const fromRight = this.px >= oR.r + 1;            // previously fully right of object
+
+                            // If approaching from left and moving right, or from right and moving left, it's a real wall hit
+                            if ((fromLeft && this.vx > 0) || (fromRight && this.vx < 0)) {
+                                this.die();
+                                return;
+                            }
+
+                            // Otherwise ignore collision (likely a landing/overlap due to rounding or small vertical movement)
+                        }
+                    }
+
+                    // --- HAZARDS (SPIKES) ---
+                    else if(o.t === T.SPIKE) {
+                        this.die();
+                    }
+
+                    // --- JUMP PADS (Springs) ---
+                    else if(o.t === T.PAD_Y || o.t === T.PAD_P) {
+                        let padForce = (o.t === T.PAD_Y ? C.PAD_Y : C.PAD_P) * this.gravDir;
+                        // Check if player is on the ground plane of the pad
+                        if (this.ground || (this.mode === 'cube' &&
+                            (this.gravDir === 1 && ppR.b <= oR.t + 2) || (this.gravDir === -1 && ppR.t >= oR.b - 2))) {
+                            this.vy = padForce; Sfx.play('jump');
+                            this.ground = false; // Lift off ground immediately
+                        }
+                    }
+
+                    // --- ORBS (Requires Input) ---
+                    else if(o.t === T.ORB_Y || o.t === T.ORB_P) {
+                        if(input.tap) {
+                            this.vy = (o.t === T.ORB_Y ? C.ORB_Y : C.ORB_P) * this.gravDir;
+                            this.ground = false;
+                            input.tap = false; // Consume tap
+                            Sfx.play('orb');
+                        }
+                    }
+
+                    // --- PORTALS ---
+                    else if(o.t === T.PORT_SHIP) {
+                        if(this.mode !== 'ship') { this.mode = 'ship'; Sfx.play('portal'); }
+                    }
+                    else if(o.t === T.PORT_CUBE) {
+                        if(this.mode !== 'cube') { this.mode = 'cube'; this.rot = 0; Sfx.play('portal'); }
+                    }
+                    else if(o.t === T.PORT_GRAV_I) {
+                        if(this.gravDir === 1) {
+                            this.gravDir = -1;
+                            this.vy = -this.vy * 0.5; // Reverse velocity slightly
+                            Sfx.play('portal');
+                        }
+                    }
+                    else if(o.t === T.PORT_GRAV_N) {
+                        if(this.gravDir === -1) {
+                            this.gravDir = 1;
+                            this.vy = -this.vy * 0.5; // Reverse velocity slightly
+                            Sfx.play('portal');
+                        }
+                    }
+                }
+            }
+
+            // Check for Win condition (simple check: if past a certain point)
+            if (this.x > (LEVELS[Game.currLvl].minLen + (Game.currLvl * 50) - 10) * C.BLK) {
+                this.win = true;
+                Game.onWin();
+            }
+        }
+
+        // Called by input handler
+        jump() {
+            if(this.mode === 'cube' && this.ground) {
+                this.vy = C.JUMP * this.gravDir;
+                this.ground = false;
+                Sfx.play('jump');
+            }
+        }
+
+        die() {
+            if(this.dead) return;
+            this.dead = true;
+            Sfx.play('die');
+            Game.shake();
+            setTimeout(Game.onDeath, 800);
+        }
+    }
+
+    // --- MAIN GAME LOOP AND STATE ---
+    const Game = {
+        cvs: null, ctx: null,
+        p: new Player(),
+        objs: [],
+        state: 'menu',
+        camX: 0, shakeT: 0,
+        input: { hold: false, tap: false },
+        att: 1,
+        currLvl: 0,
+
+        init() {
+            this.cvs = document.getElementById('gameCanvas');
+            this.ctx = this.cvs.getContext('2d');
+            window.onresize = ()=> { this.cvs.width=window.innerWidth; this.cvs.height=window.innerHeight; };
+            window.onresize();
+
+            // Populate Level List in the menu
+            const l = document.getElementById('level-list');
+            l.innerHTML = ''; // Clear previous entries
+            LEVELS.forEach((lvl,i) => {
+                // Ensure onclick uses the globally accessible name
+                l.innerHTML += `<div class="level-btn" onclick="window.Game.play(${i})"><b>${lvl.n}</b> <small>${lvl.d}</small></div>`;
+            });
+
+            this.setupInput();
+            this.loop();
+        },
+
+        setupInput() {
+            // Input Setup (Works for both desktop keypress and mobile touch)
+            const down = (e) => {
+                if(this.state!=='play') return;
+                if(e.type==='touchstart' || e.type==='mousedown') e.preventDefault();
+                Sfx.init();
+                this.input.hold = true;
+                this.input.tap = true;
+                this.p.holding = true;
+                this.p.jump();
+            };
+            const up = () => { this.input.hold = false; this.p.holding = false; };
+
+            // Keyboard controls
+            window.onkeydown = (e) => {
+                if(e.code==='Space'||e.code==='ArrowUp') down(e);
+                if(e.code==='Escape') this.pause();
+            };
+            window.onkeyup = (e) => {
+                if(e.code==='Space'||e.code==='ArrowUp') up();
+            };
+
+            // Touch/Mouse controls for gameplay
+            const touch = document.getElementById('mobile-controls');
+            touch.onmousedown = down; touch.onmouseup = up;
+            touch.ontouchstart = down; touch.ontouchend = up;
+        },
+
+        play(idx) {
+            if(idx !== undefined) this.currLvl = idx;
+            const data = genLevel(this.currLvl);
+            this.load(data);
+        },
+
+        load(map) {
+            this.objs = [];
+            for(let r=0; r<12; r++) {
+                for(let c=0; c<map[r].length; c++) {
+                    if(map[r][c] !== 0) this.objs.push({x:c*C.BLK, y:r*C.BLK, t:map[r][c]});
+                }
+            }
+            this.restart(true);
+        },
+
+        restart(full=false) {
+            this.p.reset();
+            this.camX = 0;
+            this.input.hold = false;
+            this.state = 'play';
+            document.querySelectorAll('.menu-screen').forEach(e=>e.classList.remove('active'));
+            document.getElementById('editor-ui').classList.remove('active');
+            document.getElementById('hud').style.display='block';
+            document.getElementById('mobile-controls').style.display='block';
+            if(!full) this.att++;
+            document.getElementById('att').innerText = this.att;
+        },
+
+        pause() {
+            if(this.state !== 'play') return;
+            this.state = 'pause';
+            document.getElementById('m-pause').classList.add('active');
+            document.getElementById('p-title').innerText = "PAUSED";
+            document.getElementById('btn-resume').style.display = "inline-block";
+            document.getElementById('mobile-controls').style.display='none';
+        },
+
+        resume() {
+            this.state = 'play';
+            document.getElementById('m-pause').classList.remove('active');
+            document.getElementById('mobile-controls').style.display='block';
+        },
+
+        onDeath() {
+            Game.state = 'pause';
+            document.getElementById('m-pause').classList.add('active');
+            document.getElementById('p-title').innerText = "CRASHED";
+            document.getElementById('btn-resume').style.display = "none"; // Hide resume button
+            document.getElementById('mobile-controls').style.display='none';
+        },
+
+        onWin() {
+            Game.state = 'pause';
+            document.getElementById('m-pause').classList.add('active');
+            document.getElementById('p-title').innerText = "LEVEL COMPLETE!";
+            document.getElementById('btn-resume').style.display = "none";
+            document.getElementById('mobile-controls').style.display='none';
+        },
+
+        menu(id) {
+            this.state = 'menu';
+            document.querySelectorAll('.menu-screen').forEach(e=>e.classList.remove('active'));
+            document.getElementById('hud').style.display='none';
+            document.getElementById('editor-ui').classList.remove('active');
+            document.getElementById('mobile-controls').style.display='none';
+
+            if(id==='main') document.getElementById('m-main').classList.add('active');
+            if(id==='levels') document.getElementById('m-levels').classList.add('active');
+            if(id==='cust') {
+                document.getElementById('m-cust').classList.add('active');
+                this.updIcon();
+            }
+        },
+
+        editor() {
+            this.menu('none'); // Hides all menus
+            this.state = 'editor';
+            Editor.init();
+            document.getElementById('editor-ui').classList.add('active');
+        },
+
+        loop() {
+            requestAnimationFrame(()=>this.loop());
+
+            // --- Clear ---
+            this.ctx.fillStyle = '#1a1a2e';
+            this.ctx.fillRect(0,0,this.cvs.width, this.cvs.height);
+
+            // --- Update ---
+            if(this.state === 'play') {
+                this.p.update(this.objs, this.input);
+                this.input.tap = false; // Reset tap
+                this.camX = this.p.x - 200; // Follow player
+            } else if(this.state === 'editor') {
+                // Editor handles its own input and view
+            }
+
+            // --- Draw Setup ---
+            this.ctx.save();
+            let shake = 0;
+            if(this.shakeT > 0) { shake = (Math.random()-0.5)*15; this.shakeT--; }
+
+            // Calculate camera offsets
+            let cx = (this.state==='editor') ? Editor.cx : this.camX;
+            let floorScreenY = this.cvs.height - 200; // 200px offset from bottom
+            let cy = (11*C.BLK) - floorScreenY;
+
+            this.ctx.translate(Math.floor(-cx + shake), Math.floor(-cy + shake));
+
+            // --- Draw World ---
+            this.drawWorld(cx, cy);
+
+            // --- Draw Objects ---
+            let viewL = cx - C.BLK, viewR = cx + this.cvs.width + C.BLK;
+            let objsToDraw = (this.state==='editor') ? Editor.objs : this.objs;
+
+            for(let o of objsToDraw) {
+                if(o.x < viewL || o.x > viewR) continue;
+                this.drawObj(o);
+            }
+
+            // --- Draw Player ---
+            if(this.state === 'play' || this.state === 'pause') {
+                this.drawPlayer();
+            }
+
+            // --- Editor Overlay ---
+            if(this.state === 'editor') Editor.draw(this.ctx, cx, cy);
+
+            this.ctx.restore();
+        },
+
+        drawWorld(cx, cy) {
+            // Floor
+            this.ctx.fillStyle = '#0f3460';
+            this.ctx.fillRect(cx, 11*C.BLK, this.cvs.width, 1000);
+            this.ctx.strokeStyle = 'white';
+            this.ctx.lineWidth=2;
+            this.ctx.beginPath(); this.ctx.moveTo(cx, 11*C.BLK); this.ctx.lineTo(cx+this.cvs.width, 11*C.BLK); this.ctx.stroke();
+
+            // Ceiling
+            this.ctx.beginPath(); this.ctx.moveTo(cx, 0); this.ctx.lineTo(cx+this.cvs.width, 0);
+            this.ctx.strokeStyle = 'rgba(255,255,255,0.2)'; this.ctx.lineWidth=1; this.ctx.stroke();
+        },
+
+        drawObj(o) {
+            const x = o.x, y = o.y, s = C.BLK;
+            const c = this.ctx;
+
+            if(o.t === T.BLOCK) {
+                c.fillStyle = 'black'; c.fillRect(x,y,s,s);
+                c.strokeStyle = 'var(--primary)'; c.lineWidth=2; c.strokeRect(x,y,s,s);
+                c.fillStyle='rgba(0,255,234,0.15)'; c.fillRect(x+5,y+5,s-10,s-10);
+            }
+            else if(o.t === T.SPIKE) {
+                c.fillStyle='black'; c.beginPath(); c.moveTo(x,y+s); c.lineTo(x+s/2,y); c.lineTo(x+s,y+s); c.closePath(); c.fill();
+                c.strokeStyle='red'; c.lineWidth=2; c.stroke();
+            }
+            else if(o.t === T.PAD_Y || o.t === T.PAD_P) {
+                c.beginPath(); c.arc(x+s/2, y+s-5, 15, Math.PI, 0);
+                c.fillStyle = (o.t===T.PAD_Y)?'yellow':'#ff00ff'; c.fill();
+                c.strokeStyle = c.fillStyle; c.lineWidth=3; c.stroke();
+                // Draw spring
+                c.beginPath(); c.moveTo(x+s/2, y+s-5); c.lineTo(x+s/2, y+s-20); c.stroke();
+            }
+            else if(o.t === T.ORB_Y || o.t === T.ORB_P) {
+                c.beginPath(); c.arc(x+s/2, y+s/2, 20, 0, Math.PI*2);
+                c.fillStyle = 'black'; c.fill();
+                c.strokeStyle = (o.t===T.ORB_Y)?'yellow':'#ff00ff'; c.lineWidth=4; c.stroke();
+                // Inner color
+                c.beginPath(); c.arc(x+s/2, y+s/2, 10, 0, Math.PI*2); c.fillStyle=c.strokeStyle; c.fill();
+            }
+            else if(o.t >= T.PORT_SHIP) {
+                // Portals
+                let col = 'white';
+                if(o.t===T.PORT_SHIP) col='var(--color-ship)';
+                if(o.t===T.PORT_CUBE) col='var(--color-cube)';
+                if(o.t===T.PORT_GRAV_N) col='var(--color-grav-down)';
+                if(o.t===T.PORT_GRAV_I) col='var(--color-grav-up)';
+
+                c.lineWidth=3; c.strokeStyle=col;
+                c.strokeRect(x+10, y, 40, C.BLK*2); // Tall rectangle (120px)
+                // Swirl/effect
+                c.globalAlpha=0.5; c.fillStyle=col; c.fillRect(x+15, y+5, 30, C.BLK*2-10); c.globalAlpha=1;
+
+                // Symbol
+                c.font = '24px Roboto'; c.fillStyle = 'black'; c.textAlign = 'center';
+                if(o.t===T.PORT_SHIP) { c.fillText('S', x+30, y+C.BLK+5); }
+                else if(o.t===T.PORT_CUBE) { c.fillText('C', x+30, y+C.BLK+5); }
+                else if(o.t===T.PORT_GRAV_N) { c.fillText('▼', x+30, y+C.BLK*2 - 20); }
+                else if(o.t===T.PORT_GRAV_I) { c.fillText('▲', x+30, y+25); }
+            }
+        },
+
+        drawPlayer() {
+            const c = this.ctx;
+            c.save();
+            c.translate(this.p.x + this.p.w/2, this.p.y + this.p.h/2);
+            c.rotate(this.p.rot);
+
+            let scaleX = 1, scaleY = 1;
+            if(this.p.mode === 'ship') { scaleX = 1.2; scaleY = 0.8; }
+
+            // Flip player icon if gravity is inverted, but only visually for the cube
+            if(this.p.gravDir === -1 && this.p.mode === 'cube') scaleY = -1;
+
+            c.scale(scaleX, scaleY);
+
+            // Body
+            c.fillStyle = this.p.c1; c.fillRect(-20,-20,40,40);
+            // Inner
+            c.fillStyle = this.p.c2; c.fillRect(-10,-10,20,20);
+            // Border
+            c.strokeStyle = 'black'; c.lineWidth = 2; c.strokeRect(-20,-20,40,40);
+
+            if(this.p.mode === 'ship') {
+                // Ship details (tail and cockpit)
+                c.fillStyle = this.p.c1; c.beginPath(); c.moveTo(-20,0); c.lineTo(-35, -10); c.lineTo(-35, 10); c.closePath(); c.fill(); c.stroke();
+                c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(5,-10,15,10);
+            }
+
+            c.restore();
+        },
+
+        shake() { this.shakeT = 10; },
+
+        // Updates colors in the customizer menu
+        updIcon() {
+            this.p.c1 = document.getElementById('c1').value;
+            this.p.c2 = document.getElementById('c2').value;
+            const c = document.getElementById('prevC').getContext('2d');
+            c.clearRect(0,0,80,80);
+            c.fillStyle=this.p.c1; c.fillRect(10,10,60,60);
+            c.fillStyle=this.p.c2; c.fillRect(30,30,20,20);
+            c.strokeStyle = 'black'; c.lineWidth = 2; c.strokeRect(10,10,60,60);
+        }
+    };
+
+    // --- EDITOR MODE ---
+    const Editor = {
+        objs: [],
+        cx: 0,
+        t: T.BLOCK, // Current tool
+
+        // Dragging state variables
+        isDragging: false,
+        dragStartX: 0,
+        dragStartY: 0,
+
+        init() {
+            this.cx = 0;
+            this.tool(T.BLOCK); // Set default tool
+
+            const cvs = document.getElementById('gameCanvas');
+
+            // --- INPUT HANDLERS for Editor ---
+
+            const startInteraction = (e) => {
+                if(Game.state !== 'editor') return;
+                e.preventDefault();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                this.isDragging = false;
+                this.dragStartX = clientX;
+                this.dragStartY = clientY;
+            };
+
+            const moveInteraction = (e) => {
+                if(Game.state !== 'editor' || e.buttons === 0 && !e.touches) return; // For mouse drag
+                e.preventDefault();
+
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const deltaX = clientX - this.dragStartX;
+
+                if (Math.abs(deltaX) > 5 || this.isDragging) {
+                    // It's a drag operation
+                    this.isDragging = true;
+                    this.cx -= deltaX * 1.5;
+                    this.cx = Math.max(0, this.cx);
+                    this.dragStartX = clientX; // Update start for next frame
+                }
+            };
+
+            const endInteraction = (e) => {
+                if(Game.state !== 'editor') return;
+
+                const currentX = e.clientX || this.dragStartX; // Use last recorded position for touch end
+                const currentY = e.clientY || this.dragStartY;
+
+                // Check if it was a quick tap (minimal movement)
+                const movedDistance = Math.hypot(currentX - this.dragStartX, currentY - this.dragStartY);
+
+                if (movedDistance < 10 && !this.isDragging) {
+                    // We need to pass the event object if available (e.g., from touch end)
+                    this.handlePlacement(e.touches ? e.changedTouches[0] : e);
+                }
+                this.isDragging = false;
+            };
+
+            // Note: The previous logic had duplicated listener definitions, which may have led to issues.
+            // We now assume clean re-binding every time Editor.init() is called.
+
+            // Clean up previous listeners (best practice)
+            cvs.removeEventListener('mousedown', startInteraction);
+            cvs.removeEventListener('mousemove', moveInteraction);
+            cvs.removeEventListener('mouseup', endInteraction);
+            cvs.removeEventListener('touchstart', startInteraction);
+            cvs.removeEventListener('touchmove', moveInteraction);
+            cvs.removeEventListener('touchend', endInteraction);
+
+            // Re-bind listeners
+            cvs.addEventListener('mousedown', startInteraction);
+            cvs.addEventListener('mousemove', moveInteraction);
+            cvs.addEventListener('mouseup', endInteraction);
+
+            cvs.addEventListener('touchstart', startInteraction);
+            cvs.addEventListener('touchmove', moveInteraction);
+            cvs.addEventListener('touchend', endInteraction);
+        },
+
+        handlePlacement(event) {
+            const cvs = document.getElementById('gameCanvas');
+            const r = cvs.getBoundingClientRect();
+            // Use the clientX/Y from the event object
+            let tx = event.clientX;
+            let ty = event.clientY;
+
+            // Calculate screen to world translation
+            let floorScreenY = cvs.height - 200;
+            let cy = (11*C.BLK) - floorScreenY;
+
+            let wx = (tx - r.left) + this.cx;
+            let wy = (ty - r.top) + cy;
+
+            // Convert to grid coordinates
+            let gx = Math.floor(wx / C.BLK) * C.BLK;
+            let gy = Math.floor(wy / C.BLK) * C.BLK;
+
+            // Allow placement on ground row (row 10). Only disallow row 11 (off-screen).
+            if (gy >= 11 * C.BLK) return;
+
+            // Add/Remove logic: find existing object at this grid spot
+            let idx = this.objs.findIndex(o=>o.x===gx && o.y===gy);
+
+            if(idx > -1) {
+                // Remove if the current tool is the same as the existing object
+                if (this.objs[idx].t === this.t) {
+                    this.objs.splice(idx,1);
+                } else {
+                    // Replace if the tool is different
+                    this.objs[idx].t = this.t;
+                }
+            } else {
+                // Add new object
+                this.objs.push({x:gx, y:gy, t:this.t});
+            }
+        },
+
+        draw(ctx, cx, cy) {
+            // Draw Grid Overlay
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth=1;
+            let sx = Math.floor(cx/C.BLK)*C.BLK;
+
+            // Draw Vertical Lines
+            for(let x=sx; x<sx+ctx.canvas.width + C.BLK*2; x+=C.BLK) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 11*C.BLK); ctx.stroke();
+            }
+            // Draw Horizontal Lines
+            for(let y=0; y<12; y++) {
+                let ry = y*C.BLK;
+                ctx.beginPath(); ctx.moveTo(sx, ry); ctx.lineTo(sx+ctx.canvas.width + C.BLK*2, ry); ctx.stroke();
+            }
+        },
+
+        tool(id) {
+            this.t = id;
+            // Update selection visual
+            document.querySelectorAll('#editor-ui .tool').forEach(e => e.classList.remove('selected'));
+
+            let elementIndex = 0;
+            // Map T constants to the index of the tool elements in the toolbar
+            if(id === T.BLOCK) elementIndex = 0;
+            else if(id === T.SPIKE) elementIndex = 1;
+            else if(id === T.PAD_Y) elementIndex = 2;
+            else if(id === T.PAD_P) elementIndex = 3;
+            else if(id === T.ORB_Y) elementIndex = 4;
+            else if(id === T.ORB_P) elementIndex = 5;
+            else if(id === T.PORT_SHIP) elementIndex = 6;
+            else if(id === T.PORT_CUBE) elementIndex = 7;
+            else if(id === T.PORT_GRAV_I) elementIndex = 8;
+            else if(id === T.PORT_GRAV_N) elementIndex = 9;
+
+            document.querySelectorAll('#editor-ui .tool')[elementIndex].classList.add('selected');
+        },
+
+        test() {
+            // Test button copies editor objects and starts the game
+            Game.objs = JSON.parse(JSON.stringify(this.objs));
+            Game.restart(true);
+        }
+    };
+
+
+    // --- GLOBAL EXPOSURE (REQUIRED for HTML onclick attributes) ---
+    // Expose the Game and Editor objects to the global window object.
+    window.Game = Game;
+    window.Editor = Editor;
+    window.Sfx = Sfx;
+
+
+    window.onload = Game.init.bind(Game);
+})(); // IIFE ends here, ensuring internal variables like C and T are scoped locally.
+</script>
 </body>
-
 </html>
